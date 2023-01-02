@@ -1,25 +1,31 @@
-FROM ubuntu:20.04 as builder
+FROM debian:bullseye as builder
 
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y cmake g++ git libboost-program-options-dev libpng++-dev zlib1g-dev
+    apt-get install --no-install-recommends -y cmake g++ build-essential libboost-program-options1.74-dev libpng++-dev zlib1g-dev
 
 COPY . /bedrock-viz
 
-RUN cd /bedrock-viz && \
-    patch -p0 < patches/leveldb-1.22.patch && \
+WORKDIR /bedrock-viz
+
+RUN patch -p0 < patches/leveldb-1.22.patch && \
     patch -p0 < patches/pugixml-disable-install.patch && \
-    mkdir -p build && cd build && \
-    cmake .. && \
+    mkdir -p build
+
+WORKDIR /bedrock-viz/build
+RUN cmake .. && \
     make && \
     make install
 
-FROM ubuntu:20.04
+FROM node:lts-bullseye
 
 RUN apt-get update && \
-    apt-get install -y libpng16-16 libboost-program-options-dev && \
+    apt-get install --no-install-recommends -y libboost-program-options1.74.0 && \
     rm -rf /var/cache/apt
 
 COPY --from=builder /usr/local/share/bedrock-viz /usr/local/share/bedrock-viz
 COPY --from=builder /usr/local/bin/bedrock-viz /usr/local/bin/
+COPY frontend.js ./
 
-ENTRYPOINT ["/usr/local/bin/bedrock-viz"]
+EXPOSE 3333
+
+ENTRYPOINT ["node", "frontend.js"]
