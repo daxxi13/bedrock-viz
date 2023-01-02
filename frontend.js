@@ -407,6 +407,7 @@ function makeMapList(localuser, excludemap = '', scrollpos = 0) {
         publicmap = true;
       }
       k = findworldindex(files[i]);
+      includemap = (files[i] !== excludemap);
       if (k < 0) { // if map doesn't exist in Minecraft worlds, add it to the worlds[] list
         worlds[worlds.length] = {
           name: files[i],
