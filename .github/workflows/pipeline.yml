@@ -3,111 +3,31 @@ name: Pipeline
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
 
 jobs:
-  Ubuntu:
-    runs-on: ubuntu-20.04
-
+  push_to_registry:
+    name: Push Docker image to Docker Hub
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
+      - name: Check out the repo
+        uses: actions/checkout@v3
 
-    - name: Install requirements
-      run: |
-        sudo -E apt-get -qq update
-        sudo -E apt-get -qq install python3 libpng++-dev zlib1g-dev g++-8 libboost-program-options-dev wget lcov libjson-perl libperlio-gzip-perl
-        g++ --version
-        gcov --version
-    
-    - name: Patch libraries
-      run: |
-        git apply -p0 patches/leveldb-1.22.patch
-        git apply -p0 patches/pugixml-disable-install.patch
+      - name: Log in to Docker Hub
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Build
-      run: |
-        mkdir build && cd build
-        cmake -DBUILD_TESTS=ON -DCODE_COVERAGE=ON ..
-        make
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        with:
+          images: bigmichi1/bedrock-viz
 
-    - name: Test
-      continue-on-error: true
-      run: |
-        ./build/bedrock-viz-test --gtest_output="xml:unittests.xml" --gtest_filter="Unit*:*.Unit*"
-        ./build/bedrock-viz-test --gtest_output="xml:integrationtests.xml" --gtest_filter="Integration*:*.Integration*"
-        ./build/bedrock-viz-test --gtest_output="xml:ungroupedtests.xml" --gtest_filter="-Unit*:*.Unit*:Integration*:*.Integration*"
-
-    - name: Upload Test Report
-      env:
-        REPORT_CI_TOKEN: ${{secrets.REPORT_CI_TOKEN}}
-      run: | 
-        curl -s https://report.ci/upload.py | python3 - --include='*.xml' --framework=gtest 
-    
-    - name: Generate Coverage Report
-      run: | 
-        lcov --base-directory . --directory build -c -o coverage.info
-        lcov --remove coverage.info '/usr/*' '*/third_party/*' '*/tests/*' --output-file coverage.info
-        lcov --list coverage.info
-
-    - name: Upload Coverage to Codecov
-      uses: codecov/codecov-action@v1
-      with: 
-        file: coverage.info
-
-  macOS_10_15:
-    runs-on: macos-10.15
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
-
-    - name: Install requirements
-      run: |
-        brew install libpng
-        brew install boost
-    
-    - name: Patch libraries
-      run: |
-        git apply -p0 patches/leveldb-1.22.patch
-        git apply -p0 patches/pugixml-disable-install.patch
-
-    - name: Build
-      run: |
-        mkdir build && cd build
-        cmake ..
-        make
-  
-  Windows:
-    runs-on: windows-2019
-
-    steps:
-    - name: Set git to use LF
-      run: |
-        git config --global core.autocrlf false
-        git config --global core.eol lf
-        
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
-
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v1.1
-
-    - name: Install requirements
-      run: |
-        vcpkg install zlib:x64-windows libpng:x64-windows boost-program-options:x64-windows
-    
-    - name: Patch libraries
-      run: |
-        git apply -p0 patches/leveldb-1.22.patch
-        git apply -p0 patches/pugixml-disable-install.patch
-    
-    - name: Build
-      run: |
-        mkdir build && cd build
-        cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -G "Visual Studio 16 2019" -A x64
-        msbuild bedrock-viz.sln
+      - name: Build and push Docker image
+        uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
