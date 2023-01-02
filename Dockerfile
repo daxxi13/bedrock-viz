@@ -16,7 +16,7 @@ RUN cmake .. && \
     make && \
     make install
 
-FROM node:lts-bullseye
+FROM node:19-bullseye-slim
 
 RUN apt-get update && \
     apt-get install --no-install-recommends -y libboost-program-options1.74.0 && \
