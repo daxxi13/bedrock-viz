@@ -34,9 +34,8 @@ let lastip = "0";	// last IP address seen
 let worlds = [];	// array of world objects
 
 // directory locations
-
-const worldpath = "/worlds";
-const mappath = "/maps";	// where our maps get stored
+const worldpath = process.env.WORLDS_PATH || '/worlds';
+const mappath = process.env.MAPS_PATH || '/maps';	// where our maps get stored
 
 // ---------- CODE INITIALIZATIONS ----------
 
