@@ -41,3 +41,6 @@ cmake-build-*/
 
 # VSCode
 .vscode/
+
+# Node
+node_modules

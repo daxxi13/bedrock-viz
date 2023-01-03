@@ -1,0 +1,32 @@
+{
+  "name": "bedrock-viz",
+  "version": "0.1.8",
+  "description": "[![GitHub release (latest by date including pre-releases)](https://img.shields.io/github/v/release/bedrock-viz/bedrock-viz?include_prereleases&logo=github&logoColor=white&style=plastic)](https://github.com/bedrock-viz/bedrock-viz/releases) [![GitHub last commit](https://img.shields.io/github/last-commit/bedrock-viz/bedrock-viz?logo=github&logoColor=white&style=plastic)](https://github.com/bedrock-viz/bedrock-viz/commits/master) [![GitHub Workflow Status](https://img.shields.io/github/workflow/status/bedrock-viz/bedrock-viz/Pipeline?logo=github&logoColor=white&style=plastic)](https://github.com/bedrock-viz/bedrock-viz/actions/workflows/pipeline.yml) [![GitHub issues](https://img.shields.io/github/issues-raw/bedrock-viz/bedrock-viz?logo=github&logoColor=white&style=plastic)](https://github.com/bedrock-viz/bedrock-viz/issues) [![GitHub pull requests](https://img.shields.io/github/issues-pr/bedrock-viz/bedrock-viz?logo=github&logoColor=white&style=plastic)](https://github.com/bedrock-viz/bedrock-viz/pulls)",
+  "main": "frontend.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "eslint": "eslint frontend.js",
+    "eslint-fix": "eslint --fix frontend.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bedrock-viz/bedrock-viz.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/bedrock-viz/bedrock-viz/issues"
+  },
+  "homepage": "https://github.com/bedrock-viz/bedrock-viz#readme",
+  "devDependencies": {
+    "eslint": "^8.31.0",
+    "eslint-config-standard": "^17.0.0",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-n": "^15.6.0",
+    "eslint-plugin-promise": "^6.1.1"
+  }
+}
