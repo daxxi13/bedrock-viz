@@ -26,6 +26,7 @@ commandline console window from which you started the app.
 const http = require('http');	// http server features
 const fs = require('fs');		// local file handling
 const os = require('os');
+const util = require('util');
 const path = require('path');	// basic path name parsing
 const {spawn} = require("child_process");	// this is what we use to invoke bedrock-viz
 
@@ -34,10 +35,50 @@ let lastip = "0";	// last IP address seen
 let worlds = [];	// array of world objects
 
 // directory locations
-const worldpath = process.env.WORLDS_PATH || '/worlds';
-const mappath = process.env.MAPS_PATH || '/maps';	// where our maps get stored
+const worldpath = process.env.WORLDS_PATH || '/tmp/worlds';
+const mappath = process.env.MAPS_PATH || '/tmp/maps';	// where our maps get stored
+const managementKey = process.env.MANAGEMENT_KEY
+
+// logging initialization
+const funcs = {
+  log: console.log.bind(console),
+  info: console.info.bind(console),
+  warn: console.warn.bind(console),
+  error: console.error.bind(console),
+  debug: (console.debug || console.log).bind(console)
+};
+
+function logprefix(fn) {
+  Object.keys(funcs).forEach(function(k) {
+    console[k] = function() {
+      const s = typeof fn === 'function' ? fn() : fn;
+      arguments[0] = util.format(s, arguments[0]);
+      funcs[k].apply(console, arguments);
+    };
+  });
+}
+
+function patch(prefix) {
+  if(typeof prefix === 'function')
+    logprefix(prefix);
+  else if(typeof prefix === 'string' && prefix)
+    logprefix(() => prefix + ' ' + timestamp());
+  else
+    logprefix(timestamp);
+}
+
+function timestamp() {
+  return '[' + new Date().toISOString() + ']';
+}
+
+patch();
 
 // ---------- CODE INITIALIZATIONS ----------
+
+if (!fs.existsSync(worldpath)) { // if mappath doesn't exist...
+  console.log(`Fatal error: Unable to read ${worldpath}`);
+  process.abort();
+}
 
 if (!fs.existsSync(mappath)) { // if mappath doesn't exist...
   try { // Create map directory 'MinecraftMaps' in user documents folder
@@ -62,8 +103,13 @@ Remote users can only view public maps.
 http.createServer(function (request, response) {
   let localuser = false;
   const ip = (request.headers['x-forwarded-for'] || '').split(',')[0] || request.connection.remoteAddress;
-//	if (ip == "::1" || ip == "ffff:127.0.0.1" || ip == "127.0.0.1")
-  localuser = true;
+  if (ip === "::1" || ip === "ffff:127.0.0.1" || ip === "127.0.0.1") {
+    localuser = true;
+  }
+  const cookies = parseCookies(request);
+  if (managementKey && cookies['MANAGEMENTKEY'] === managementKey) {
+    localuser = true
+  }
   if (ip !== lastip) {	// display log message only if IP address changes
     console.log(`IP address=${ip}`, localuser ? " local" : " remote");
     lastip = ip;
@@ -114,12 +160,18 @@ http.createServer(function (request, response) {
         const outdir = mappath + '/' + mapname;
 
         const tmpDir = os.tmpdir();
-        const directory = fs.mkdtempSync(tmpDir);
-        console.log(`Working directory: ${directory}`);
+        const sourceDirectory = worldpath + '/' + mapname;
+        const workingDirectory = fs.mkdtempSync(tmpDir);
 
-        fs.cpSync(worldpath + '/' + mapname, directory, {recursive: true});
+        console.log(`Working directory: ${workingDirectory}`);
+        fs.cp(sourceDirectory, workingDirectory, {recursive: true}, (err) => {
+          if (err) {
+            console.log(`Unable to copy ${sourceDirectory} to ${workingDirectory} !`);
+          }
+          console.log(`COPIED ${sourceDirectory} to ${workingDirectory}`);
+        });
         // invoke bedrock-viz
-        const bedrock_viz = spawn("bedrock-viz", ['--db', directory, '--out ', outdir, mapdetail], {
+        const bedrock_viz = spawn("bedrock-viz", ['--db', workingDirectory, '--out ', outdir, mapdetail], {
           shell: true,
           cwd: __dirname
         });
@@ -131,6 +183,12 @@ http.createServer(function (request, response) {
         });
         bedrock_viz.on('error', (error) => {
           console.log(`error: ${error.message}`);
+          fs.rm(workingDirectory, {recursive: true, force: true}, (err) => {
+            if (err) {
+              console.log(`Unable to delete ${workingDirectory} !`);
+            }
+            console.log(`DELETED ${workingDirectory}`);
+          })
         });
         bedrock_viz.on("exit", code => {
           console.log(`bedrock-viz exited with code ${code}`);
@@ -142,6 +200,12 @@ http.createServer(function (request, response) {
           }
           response.writeHead(200, {'Content-Type': contentType});
           response.end(makeMapList(localuser, '', scrollpos), 'utf-8');
+          fs.rm(workingDirectory, {recursive: true, force: true}, (err) => {
+            if (err) {
+              console.log(`Unable to delete ${workingDirectory} !`);
+            }
+            console.log(`DELETED ${workingDirectory}`);
+          })
         });
       } else {
         let excludeworld = '';
@@ -375,7 +439,6 @@ function makeMapList(localuser, excludemap = '', scrollpos = 0) {
   let html = html_pagetop(localuser);
 
   // part 1 - scan mappath for maps and update corresponding worlds[] objects with whatever is found, and also find maps for  worlds that were deleted from Minecraft
-
   let files = fs.readdirSync(mappath);
   if (files.length > 0) {
     for (i = 0; i < files.length; i++) {
@@ -480,4 +543,21 @@ function writemetafile(wrld) {
   } catch (err) {
     console.log(err);
   }
+}
+
+function parseCookies(request) {
+  const list = {};
+  const cookieHeader = request.headers?.cookie;
+  if (!cookieHeader) return list;
+
+  cookieHeader.split(`;`).forEach(function (cookie) {
+    let [name, ...rest] = cookie.split(`=`);
+    name = name?.trim();
+    if (!name) return;
+    const value = rest.join(`=`).trim();
+    if (!value) return;
+    list[name] = decodeURIComponent(value);
+  });
+
+  return list;
 }
