@@ -183,12 +183,9 @@ const server = http.createServer(function (request, response) {
         const workingDirectory = fs.mkdtempSync(tmpDir)
 
         console.log(`Working directory: ${workingDirectory}`)
-        fs.cp(sourceDirectory, workingDirectory, { recursive: true }, (err) => {
-          if (err) {
-            console.log(`Unable to copy ${sourceDirectory} to ${workingDirectory} !`)
-          }
-          console.log(`COPIED ${sourceDirectory} to ${workingDirectory}`)
-        })
+        fs.cpSync(sourceDirectory, workingDirectory, { recursive: true })
+        console.log(`COPIED ${sourceDirectory} to ${workingDirectory}`)
+
         deleteMap(mapname)
         // invoke bedrock-viz
         const bedrockViz = spawn('bedrock-viz', ['--db', workingDirectory, '--out ', outputDirectory, mapdetail], {
@@ -203,12 +200,8 @@ const server = http.createServer(function (request, response) {
         })
         bedrockViz.on('error', (error) => {
           console.log(`error: ${error.message}`)
-          fs.rm(workingDirectory, { recursive: true, force: true }, (err) => {
-            if (err) {
-              console.log(`Unable to delete ${workingDirectory} !`)
-            }
-            console.log(`DELETED ${workingDirectory}`)
-          })
+          fs.rmSync(workingDirectory, { recursive: true, force: true })
+          console.log(`DELETED ${workingDirectory}`)
         })
         bedrockViz.on('exit', code => {
           console.log(`bedrock-viz exited with code ${code}`)
@@ -221,12 +214,8 @@ const server = http.createServer(function (request, response) {
           }
           response.writeHead(200, { 'Content-Type': contentType })
           response.end(makeMapList(isManagementUser, '', scrollpos), 'utf-8')
-          fs.rm(workingDirectory, { recursive: true, force: true }, (err) => {
-            if (err) {
-              console.log(`Unable to delete ${workingDirectory} !`)
-            }
-            console.log(`DELETED ${workingDirectory}`)
-          })
+          fs.rmSync(workingDirectory, { recursive: true, force: true })
+          console.log(`DELETED ${workingDirectory}`)
         })
       } else {
         let excludeworld = ''
@@ -578,12 +567,8 @@ function makeMapList (isManagementUser, excludeMap = '', scrollPosition = 0) {
  */
 function deleteMap (mapName) {
   const dir = mapsPath + '/' + mapName
-  fs.rm(dir, { recursive: true }, (err) => {
-    if (err) {
-      console.log(`Unable to delete ${dir} !`)
-    }
-    console.log(`DELETED ${dir}`)
-  })
+  fs.rmSync(dir, { recursive: true })
+  console.log(`DELETED ${dir}`)
 }
 
 /**
