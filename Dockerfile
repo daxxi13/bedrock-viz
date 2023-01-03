@@ -19,7 +19,7 @@ RUN cmake .. && \
 FROM node:19-bullseye-slim
 
 RUN apt-get update && \
-    apt-get install --no-install-recommends -y libboost-program-options1.74.0 && \
+    apt-get install --no-install-recommends -y libboost-program-options1.74.0 libpng16-16 && \
     rm -rf /var/cache/apt
 
 COPY --from=builder /usr/local/share/bedrock-viz /usr/local/share/bedrock-viz
