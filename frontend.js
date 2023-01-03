@@ -170,6 +170,7 @@ const server = http.createServer(function (request, response) {
           }
           console.log(`COPIED ${sourceDirectory} to ${workingDirectory}`);
         });
+        deletemap(mapname);
         // invoke bedrock-viz
         const bedrock_viz = spawn("bedrock-viz", ['--db', workingDirectory, '--out ', outdir, mapdetail], {
           shell: true,
@@ -522,7 +523,6 @@ function makeMapList(localuser, excludemap = '', scrollpos = 0) {
 // asyncronous deletion of a map folder and its contents
 
 function deletemap(mapname) {
-  if (mapname.length !== 12) return; // for safety
   const dir = mappath + '/' + mapname;
   fs.rm(dir, {recursive: true}, (err) => {
     if (err) {
