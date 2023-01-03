@@ -100,7 +100,7 @@ Local users can create and delete bedrock-viz maps, and make them public or priv
 Remote users can only view public maps.
 */
 
-http.createServer(function (request, response) {
+const server = http.createServer(function (request, response) {
   let localuser = false;
   const ip = (request.headers['x-forwarded-for'] || '').split(',')[0] || request.connection.remoteAddress;
   if (ip === "::1" || ip === "ffff:127.0.0.1" || ip === "127.0.0.1") {
@@ -250,8 +250,11 @@ http.createServer(function (request, response) {
     });
   }
 
-}).listen(PORT);
-console.log(`CWD: ${__dirname}\nServer running at http://localhost:${PORT}`);
+});
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT} (${JSON.stringify(server.address())})`);
+});
+console.log(`CWD: ${__dirname}`);
 
 // end of server loop
 
