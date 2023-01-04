@@ -173,13 +173,14 @@ const server = http.createServer(function (request, response) {
       const mapname = params.get('mapname')
       const scrollposparm = params.get('scrollpos')
       const scrollpos = (scrollposparm === null) ? 0 : Number(scrollposparm)
+      const customConfig = params.get('customconfig')
 
       if (op === 'newmap') {
         const mapdetail = params.get('mapdetail')
-        const outputDirectory = mapsPath + '/' + mapname
+        const outputDirectory = `${mapsPath}${path.sep}${mapname}`
 
         const tmpDir = `${os.tmpdir()}${path.sep}`
-        const sourceDirectory = worldPath + '/' + mapname
+        const sourceDirectory = `${worldPath}${path.sep}${mapname}`
         const workingDirectory = fs.mkdtempSync(tmpDir)
 
         console.log(`Working directory: ${workingDirectory}`)
@@ -187,8 +188,14 @@ const server = http.createServer(function (request, response) {
         console.log(`COPIED ${sourceDirectory} to ${workingDirectory}`)
 
         deleteMap(mapname)
+
+        const commandArgs = ['--db', workingDirectory, '--out', outputDirectory, mapdetail]
+        if (customConfig !== null) {
+          commandArgs.push('--cfg', `${mapsPath}${path.sep}${mapname}_bedrock_viz.cfg`)
+        }
+        console.log(`running bedrock-viz with [${commandArgs.join(' ')}]`)
         // invoke bedrock-viz
-        const bedrockViz = spawn('bedrock-viz', ['--db', workingDirectory, '--out ', outputDirectory, mapdetail], {
+        const bedrockViz = spawn('bedrock-viz', commandArgs, {
           shell: true,
           cwd: __dirname
         })
@@ -273,13 +280,13 @@ console.log(`CWD: ${__dirname}`)
  * Read the Minecraft worlds directory and build a list of relevant information (directory name, location, timestamp)
  */
 function refreshWorlds () {
-  let stats, world, worldName, i, j
+  let stats, world, worldName, i, j, customConfigLocation
   console.log('getting Minecraft worlds information')
   const files = fs.readdirSync(worldPath)
   if (files.length === 0) return
   worlds = []
   for (i = 0, j = 0; i < files.length; i++) {
-    world = worldPath + '/' + files[i] + '/'
+    world = `${worldPath}${path.sep}${files[i]}${path.sep}`
     try {
       stats = fs.statSync(world)
     } catch (err) {
@@ -288,10 +295,16 @@ function refreshWorlds () {
     }
     if (stats.isDirectory()) {
       try {
-        worldName = fs.readFileSync(world + 'levelname.txt', 'utf8')
+        worldName = fs.readFileSync(`${world}levelname.txt`, 'utf8')
       } catch (err) {
         worldName = 'Unknown'
       }
+      try {
+        customConfigLocation = fs.existsSync(`${mapsPath}${path.sep}${files[i]}_bedrock_viz.cfg`)
+      } catch (err) {
+        customConfigLocation = false
+      }
+
       worlds[j++] = {
         name: files[i],
         worldname: worldName,
@@ -300,7 +313,12 @@ function refreshWorlds () {
         hasmap: false,
         mappable: true,
         mapdetail: '--html-all',
-        publicmap: true
+        publicmap: true,
+        customConfig: customConfigLocation
+      }
+      const worldMapsPath = `${mapsPath}${path.sep}${files[i]}`
+      if (!fs.existsSync(worldMapsPath)) {
+        fs.mkdirSync(worldMapsPath)
       }
     }
     worlds.sort((a, b) => {
@@ -396,12 +414,20 @@ function htmlButtonDelete (world) {
  * @returns {string}
  */
 function htmlButtonNewMap (world) {
-  return '<form class="mapaction" method="post" action="/"><input type="hidden" name="mapname" value="' +
-    world.name + '"><input type="hidden" name="op" value="newmap"><input type="hidden" name="worldname" value="' +
-    world.worldname + '"><input type="hidden" id="n' + world.name + '" name="scrollpos" value="0"><input type="hidden" name="publicmap" value="' +
-    world.publicmap.toString() +
-    "\"><input type=\"submit\" value=\"&#x1F5FA;&#xFE0F; Make new map\" onclick=\"return confirmcreate('" +
-    world.name + "','" + world.worldname + "'," + world.hasmap.toString() + ');">\n' + htmlSelectDetail(world) + '\n</form>\n'
+  let buttonText = '&#x1F5FA;&#xFE0F; Make new map'
+  if (world.customConfig) {
+    buttonText = `${buttonText} with custom config`
+  }
+  return '<form class="mapaction" method="post" action="/">' +
+    '<input type="hidden" name="mapname" value="' + world.name + '">' +
+    '<input type="hidden" name="op" value="newmap">' +
+    '<input type="hidden" name="worldname" value="' + world.worldname + '">' +
+    '<input type="hidden" id="n' + world.name + '" name="scrollpos" value="0">' +
+    '<input type="hidden" name="publicmap" value="' + world.publicmap.toString() + '">' +
+    (world.customConfig ? '<input type="hidden" name="customconfig" value="' + world.customConfig.toString() + '">' : '') +
+    '<input type="submit" value="' + buttonText + '" onclick="return confirmcreate(\'' + world.name + '\',\'' + world.worldname + '\',\'' + world.hasmap.toString() + '\');">' +
+    htmlSelectDetail(world) +
+    '</form>'
 }
 
 /**
@@ -422,10 +448,11 @@ function htmlSelectDetail (world) {
     default:
       sel2 = sel
   }
-  return ' showing: <select name="mapdetail">\
-<option value="--html"' + sel0 + '>Overviews only</option>\
-<option value="--html-most"' + sel1 + '>Overviews+Biomes</option>\
-<option value="--html-all"' + sel2 + '>ALL details</option></select>'
+  return ' showing: <select name="mapdetail">' +
+    '<option value="--html"' + sel0 + '>Overviews only</option>' +
+    '<option value="--html-most"' + sel1 + '>Overviews+Biomes</option>' +
+    '<option value="--html-all"' + sel2 + '>ALL details</option>' +
+    '</select>'
 }
 
 /**
@@ -435,11 +462,15 @@ function htmlSelectDetail (world) {
  */
 function htmlButtonPublicToggle (world) {
   const newToggleValue = !world.publicmap
-  return ' &nbsp; <form class="mapaction" method="post" action="/"><div class="' + (world.publicmap ? 'public' : 'private') + '"><input type="hidden" name="mapname" value="' +
-    world.name + '"><input type="hidden" name="op" value="html_buttonPublicToggle"><input type="hidden" id="p' + world.name + '" name="scrollpos" value="0"><input type="hidden" name="publicmap" value="' +
-    newToggleValue.toString() + '"> &nbsp;Map is ' + (world.publicmap ? '<strong>public</strong> ' : '<strong>private</strong> ') +
-    '<input type="submit" value="' + (world.publicmap ? '&#x1F512;&#xFE0F; Make private' : '&#x1F513;&#xFE0F; Make public') +
-    "\" onclick=\"return setscrollpos('p" + world.name + "');\">\n</div></form>\n"
+  return ' &nbsp; <form class="mapaction" method="post" action="/">' +
+    '<div class="' + (world.publicmap ? 'public' : 'private') + '">' +
+    '<input type="hidden" name="mapname" value="' + world.name + '">' +
+    '<input type="hidden" name="op" value="html_buttonPublicToggle">' +
+    '<input type="hidden" id="p' + world.name + '" name="scrollpos" value="0">' +
+    '<input type="hidden" name="publicmap" value="' + newToggleValue.toString() + '"> &nbsp;Map is ' + (world.publicmap ? '<strong>public</strong> ' : '<strong>private</strong> ') +
+    '<input type="submit" value="' + (world.publicmap ? '&#x1F512;&#xFE0F; Make private' : '&#x1F513;&#xFE0F; Make public') + '" onclick="return setscrollpos(\'p' + world.name + '\');">' +
+    '</div>' +
+    '</form>'
 }
 
 /**
@@ -448,9 +479,19 @@ function htmlButtonPublicToggle (world) {
  * @returns {string}
  */
 function htmlPageBottom (scrollPosition = 0) {
-  return '\n</div>\n<div id="spinner" class="modal"><div class="modal-content"><img src="https://static.wikia.nocookie.net/minecraft_gamepedia/images/c/c0/End_Crystal_%28Slateless%29.gif" width="150" height="160" alt="[please wait]"><br>See console</div></div>\n\
-<script>\n window.scrollTo(0,' + scrollPosition + ");\n</script>\n\
-<div id=\"footer\"><hr><p>GUI front end for <a href=\"https://github.com/bedrock-viz/bedrock-viz\" target=\"_blank\">bedrock-viz</a> <cite>Minecraft</cite> map viewer.</p><p>Front end by <a href=\"https://www.nablu.com/p/about.html\" target=\"_blank\">Alex Matulich</a>.</p><p> Title and 'busy' graphic assets obtained from the <a href=\"\" target=\"_blank\">Minecraft Wiki</a>.</p></div>\n</body>\n</html>\n"
+  return '</div>' +
+    '<div id="spinner" class="modal">' +
+    '<div class="modal-content"><img src="https://static.wikia.nocookie.net/minecraft_gamepedia/images/c/c0/End_Crystal_%28Slateless%29.gif" width="150" height="160" alt="[please wait]"><br>See console</div>' +
+    '</div>' +
+    '<script>window.scrollTo(0,' + scrollPosition + ');</script>' +
+    '<div id="footer">' +
+    '<hr>' +
+    '<p>GUI front end for <a href="https://github.com/bedrock-viz/bedrock-viz" target="_blank">bedrock-viz</a> <cite>Minecraft</cite> map viewer.</p>' +
+    '<p>Front end by <a href="https://www.nablu.com/p/about.html" target="_blank">Alex Matulich</a>.</p>' +
+    '<p> Title and \'busy\' graphic assets obtained from the <a href="" target="_blank">Minecraft Wiki</a>.</p>' +
+    '</div>' +
+    '</body>' +
+    '</html>'
 }
 
 /**
@@ -486,7 +527,7 @@ function makeMapList (isManagementUser, excludeMap = '', scrollPosition = 0) {
   const files = fs.readdirSync(mapsPath)
   if (files.length > 0) {
     for (i = 0; i < files.length; i++) {
-      fpath = mapsPath + '/' + files[i]
+      fpath = `${mapsPath}${path.sep}${files[i]}`
       try {
         stats = fs.statSync(fpath)
       } catch (err) {
@@ -494,14 +535,14 @@ function makeMapList (isManagementUser, excludeMap = '', scrollPosition = 0) {
         continue
       }
       if (!stats.isDirectory()) continue
-      ipath = fpath + '/index.html'
+      ipath = `${fpath}${path.sep}index.html`
       try {
         istats = fs.statSync(ipath)
       } catch (err) {
         console.log(`Error getting ${ipath}`)
         continue
       }
-      mapinfopath = fpath + '/mapinfo.json'
+      mapinfopath = `${fpath}${path.sep}mapinfo.json`
       mapinfo = ''
       if (fs.existsSync(mapinfopath)) {
         rawmapinfo = fs.readFileSync(mapinfopath)
@@ -576,7 +617,7 @@ function deleteMap (mapName) {
  * @param {*} world
  */
 function writeMetafile (world) {
-  const mpath = mapsPath + '/' + world.name + '/mapinfo.json'
+  const mpath = `${mapsPath}${path.sep}${world.name}${path.sep}mapinfo.json`
   console.log(`writing ${mpath}`)
   try {
     fs.writeFileSync(mpath, JSON.stringify({
